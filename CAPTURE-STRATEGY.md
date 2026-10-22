@@ -1,45 +1,45 @@
 # Capture strategy
 
-Decision, 2026-10-22: adopt the **Readwise Reader model** — multi-channel, always user-initiated
-capture. No live OAuth sync of "saved/liked" items from any platform; confirmed infeasible even
-for Readwise/Twitter (the most API-open of the comparable platforms), per
-[Readwise Reader's own docs](https://docs.readwise.io/reader/docs/faqs/adding-new-content). See
-`README.md` for why the naive "connect via API and auto-pull saved posts" premise doesn't work.
+Decision, 2026-10-22: adopt the user-initiated capture model Readwise Reader uses (no platform
+offers live OAuth sync of "saved/liked" items — confirmed, including for Readwise/Twitter, the
+most API-open comparable case: [docs.readwise.io](https://docs.readwise.io/reader/docs/faqs/adding-new-content)).
+See `README.md` for why "connect via API and auto-pull saved posts" doesn't work.
 
-## Channels
+**Design rule, 2026-10-22 (updated — minimize user effort):** don't expose a menu of capture
+channels and make the user pick one. **Exactly one path per platform**, chosen for the fewest
+possible steps for that platform specifically. No channel is added just because a platform
+technically supports it.
 
-| Channel | How it works | Trigger |
-|---|---|---|
-| Browser extension | User views a post/article → clicks the Saver extension icon → extension reads the **rendered page content** (not just the URL) → sends to Saver | User-initiated |
-| Mobile share sheet | User taps native Share inside the source app → picks Saver from the OS share sheet | User-initiated |
-| Email forwarding | Each Saver account gets a unique inbound email address; user forwards (or auto-forwards) an email to it → Saver parses the HTML into a clean article | User-initiated (or a one-time mail-rule setup) |
-| RSS | User subscribes to a public feed inside Saver → new posts appear automatically | Passive, after one-time subscribe |
-| URL-based save link | `https://saver.app/save?url=<url>` — Saver fetches + parses server-side | User-initiated (bookmarklet, Shortcuts, Zapier/IFTTT) |
+## The one path per platform
 
-## Per-platform channel map
+| Platform | The one path | Steps for the user | Why this one |
+|---|---|---|---|
+| **Substack** | **Auto-pull via RSS.** User adds a publication once (paste its name/URL) → every future post appears in Saver automatically, forever. | **1 step, one-time, per publication.** Zero steps per post after that. | Substack publishes a public RSS feed per publication — the only one of the four platforms where a true "set once, zero-touch forever" path exists. Chosen over email-forwarding because setting up a mail-client filter is itself a multi-step, technical, provider-specific task for a casual user — worse, not better. |
+| **Facebook** | **Share → Saver**, from the native app or browser. | **1 tap per post** — replaces, does not add to, the tap they already do to hit "Save" today. | No API, no RSS, no email channel exists (see README.md). This is the floor; it cannot go lower given platform restrictions, not a product shortcoming. |
+| **LinkedIn** | **Share → Saver** | **1 tap per post**, same as above | Same reasoning as Facebook. |
+| **Threads** | **Share → Saver** | **1 tap per post**, same as above | Same reasoning as Facebook. |
 
-| Platform | Extension | Share sheet | Email forward | RSS | URL-save link |
-|---|---|---|---|---|---|
-| Facebook | ✅ (web) | ✅ (app) | — | — | ⚠️ only if the post has a public URL (many don't) |
-| LinkedIn | ✅ (web) | ✅ (app) | — | — | ⚠️ same caveat as Facebook |
-| Threads | ✅ (web, limited) | ✅ (app) | — | — | ⚠️ same caveat |
-| **Substack** | ✅ (web) | ✅ (app) | **✅ — best channel**, Substack is email-native | ✅ public feed per publication | ✅ — posts have stable public URLs |
+Mechanism behind "Share → Saver": Saver registers as a native OS share target (iOS Share
+Extension / Android Share Intent) and, for desktop, a one-click browser extension button. Both are
+just the delivery mechanism for the same single action — there's no separate "channel decision"
+exposed to the user; the app just works whichever way they're already holding their phone or
+browser.
 
-Substack is the easiest of the four precisely because it's the only one that's email-native and
-has stable public URLs + public RSS. Facebook/LinkedIn/Threads are realistically
-extension-or-share-sheet only — same limitation Readwise itself has with Twitter/X.
+## Explicitly not building for v1
 
-## Separate concern: historical backfill
+- Email forwarding, URL-save links, bookmarklets — real channels, but each is *an additional way
+  to do the same thing*, which is exactly the "too many steps / too many choices" problem being
+  avoided here. Revisit only if user research says people actually want a second path for a given
+  platform.
+- Passive DOM-listening for a platform's native Save button — fragile, closer to scraping.
+- Any live OAuth "read my saved items" integration — not offered by any of the 4 platforms.
 
-None of the above channels retroactively pull in years of already-saved posts. For that: each
-platform's own personal-data-export feature ("Download your data") produces a file the user can
-import into Saver once. Not live, not automatic, but solves the cold-start problem independently
-of the ongoing-capture channels above.
+## Separate concern: historical backfill (still unsolved simply)
 
-## Not doing (for now)
-
-- Passive DOM-listening for the platform's own native Save/Bookmark button (fragile, breaks on
-  every UI change, closer to scraping). The explicit "Saver button/share" action is the
-  intentional choice instead.
-- Any live OAuth "read my saved items" integration — confirmed not offered by any of the 4
-  platforms (see README.md).
+Old, already-saved posts aren't touched by any path above — they only start capturing from
+whenever the user sets up Substack or installs the share/extension. Bringing in **years of past
+saves** still has no one-step answer: the only route is each platform's personal-data-export
+("Download your data") file, which the user must manually request from the platform, wait for,
+then upload to Saver. This is inherently multi-step and slow (platform-side processing time) —
+flagged here, not solved. Decide separately whether backfill is even in scope for v1, given it
+can't be made simple.
