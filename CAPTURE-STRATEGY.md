@@ -1,45 +1,55 @@
 # Capture strategy
 
-Decision, 2026-10-22: adopt the user-initiated capture model Readwise Reader uses (no platform
-offers live OAuth sync of "saved/liked" items — confirmed, including for Readwise/Twitter, the
-most API-open comparable case: [docs.readwise.io](https://docs.readwise.io/reader/docs/faqs/adding-new-content)).
-See `README.md` for why "connect via API and auto-pull saved posts" doesn't work.
+Decision, 2026-10-22: no platform offers live OAuth sync of "saved/liked" items — confirmed,
+including for Readwise/Twitter, the most API-open comparable case
+([docs.readwise.io](https://docs.readwise.io/reader/docs/faqs/adding-new-content)). See
+`README.md` for why "connect via API and auto-pull saved posts" doesn't work. Capture has to be
+user-initiated, in some form, for every platform.
 
-**Design rule, 2026-10-22 (updated — minimize user effort):** don't expose a menu of capture
-channels and make the user pick one. **Exactly one path per platform**, chosen for the fewest
-possible steps for that platform specifically. No channel is added just because a platform
-technically supports it.
+**Decision, 2026-10-22 (v1 — one mechanism only):** exactly **one** capture mechanism for **all
+four** platforms — **Share → Saver**. No per-platform special case, no RSS auto-pull, no email
+forwarding, no URL-save link. One thing to build, one thing the user learns, full stop.
 
-## The one path per platform
+An earlier version of this doc proposed RSS auto-pull for Substack specifically (true zero-touch
+after a one-time setup). **Cut from v1 on purpose** — it would mean building and maintaining two
+separate capture pipelines (an RSS ingester + a share-target handler) for a gain that only applies
+to one of the four platforms. Revisit post-v1 once the single mechanism is proven, if Substack
+users specifically ask for less-touch capture.
 
-| Platform | The one path | Steps for the user | Why this one |
-|---|---|---|---|
-| **Substack** | **Auto-pull via RSS.** User adds a publication once (paste its name/URL) → every future post appears in Saver automatically, forever. | **1 step, one-time, per publication.** Zero steps per post after that. | Substack publishes a public RSS feed per publication — the only one of the four platforms where a true "set once, zero-touch forever" path exists. Chosen over email-forwarding because setting up a mail-client filter is itself a multi-step, technical, provider-specific task for a casual user — worse, not better. |
-| **Facebook** | **Share → Saver**, from the native app or browser. | **1 tap per post** — replaces, does not add to, the tap they already do to hit "Save" today. | No API, no RSS, no email channel exists (see README.md). This is the floor; it cannot go lower given platform restrictions, not a product shortcoming. |
-| **LinkedIn** | **Share → Saver** | **1 tap per post**, same as above | Same reasoning as Facebook. |
-| **Threads** | **Share → Saver** | **1 tap per post**, same as above | Same reasoning as Facebook. |
+## The one mechanism
 
-Mechanism behind "Share → Saver": Saver registers as a native OS share target (iOS Share
-Extension / Android Share Intent) and, for desktop, a one-click browser extension button. Both are
-just the delivery mechanism for the same single action — there's no separate "channel decision"
-exposed to the user; the app just works whichever way they're already holding their phone or
-browser.
+**Share → Saver**, everywhere:
+
+| Surface | What the user does |
+|---|---|
+| Mobile (Facebook/LinkedIn/Threads/Substack apps) | View a post → tap the native **Share** button → pick **Saver** from the OS share sheet |
+| Desktop/mobile web (any of the four sites) | View a post/article → click the **Saver browser-extension icon** |
+
+Both surfaces feed the same backend action: capture whatever the OS/browser hands over (typically
+a URL + whatever title/snippet the source app includes) and, where the URL is public, fetch the
+full content server-side.
+
+**This is strictly a one-tap action, same as the "Save" button the user already uses today on
+every platform** — not an added step, a replacement one.
+
+## What this means per platform
+
+| Platform | What "Share → Saver" captures |
+|---|---|
+| Facebook | URL + snippet, if the post has a public URL; otherwise title/snippet only (see README's known limitation) |
+| LinkedIn | Same caveat as Facebook |
+| Threads | Same caveat as Facebook |
+| Substack | URL always public and stable → Saver fetches the full article server-side; best-quality capture of the four, even without a dedicated path |
 
 ## Explicitly not building for v1
 
-- Email forwarding, URL-save links, bookmarklets — real channels, but each is *an additional way
-  to do the same thing*, which is exactly the "too many steps / too many choices" problem being
-  avoided here. Revisit only if user research says people actually want a second path for a given
-  platform.
-- Passive DOM-listening for a platform's native Save button — fragile, closer to scraping.
-- Any live OAuth "read my saved items" integration — not offered by any of the 4 platforms.
+- RSS auto-pull (cut, see above).
+- Email forwarding, URL-save links, bookmarklets.
+- Passive DOM-listening for a platform's native Save button.
+- Any live OAuth "read my saved items" integration.
 
 ## Separate concern: historical backfill (still unsolved simply)
 
-Old, already-saved posts aren't touched by any path above — they only start capturing from
-whenever the user sets up Substack or installs the share/extension. Bringing in **years of past
-saves** still has no one-step answer: the only route is each platform's personal-data-export
-("Download your data") file, which the user must manually request from the platform, wait for,
-then upload to Saver. This is inherently multi-step and slow (platform-side processing time) —
-flagged here, not solved. Decide separately whether backfill is even in scope for v1, given it
-can't be made simple.
+Unchanged from before: old, already-saved posts aren't touched by Share → Saver — only new posts
+from install onward. Bringing in past saves still has no one-step answer (platform data-export
+file, manually requested and uploaded). Decide separately whether that's in scope for v1.
